@@ -1,11 +1,15 @@
 from flask import Flask, jsonify, request
-import products_dao
-import uom_dao
-from sql_connection import get_sql_connection
+from flask_cors import CORS
 import mysql.connector
 import json
 
+import products_dao
+import orders_dao
+import uom_dao
+from sql_connection import get_sql_connection
+
 app = Flask(__name__)
+CORS(app)
 
 connection = get_sql_connection()
 
@@ -20,6 +24,12 @@ def get_uom():
     response.headers.add('Access-Control-Allow-Origin','*')
     return response
 
+@app.route("/getAllOrders",methods=['GET'])
+def get_all_orders():
+    response = orders_dao.get_all_orders(connection)
+    response = jsonify(response)
+    return response
+    
 @app.route("/getProducts",methods=['GET'])
 def get_products():
     response = products_dao.get_all_products(connection)
@@ -81,6 +91,33 @@ def delete_products():
         return jsonify({
             'error': 'A database error occurred while deleting the product.'
         }), 500
+
+
+
+@app.route("/insertOrder", methods=['POST'])
+def insert_order():
+    try:
+        request_payload = json.loads(request.form['data'])
+
+        order_id = orders_dao.insert_order(
+            connection, request_payload
+        )
+
+        return jsonify({'order_id': order_id}), 201
+
+    except mysql.connector.Error:
+        connection.rollback()
+        app.logger.exception("Error inserting order")
+        return jsonify({
+            'error': 'Database error while inserting order.'
+        }), 500
+
+    except (KeyError, ValueError, TypeError):
+        connection.rollback()
+        app.logger.exception("Invalid order request")
+        return jsonify({
+            'error': 'Invalid order data. Check the submitted fields.'
+        }), 400
 
 
 @app.route("/insertProduct",methods=['POST'])
